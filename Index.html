@@ -1,0 +1,375 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#050914">
+<title>N-ARKED MUSIC</title>
+
+<style>
+:root {
+  --bg: #050914;
+  --panel: #0c1526;
+  --blue: #168cff;
+  --cyan: #54d9ff;
+  --text: #f2f7ff;
+  --muted: #8d9bb2;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, sans-serif;
+  padding-bottom: 130px;
+}
+header {
+  padding: 20px;
+  border-bottom: 1px solid #17263d;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.logo { font-size: 20px; font-weight: 900; }
+.logo span { color: var(--cyan); }
+main { max-width: 850px; margin: auto; padding: 20px; }
+h1 { font-size: 28px; margin-bottom: 8px; }
+p { color: var(--muted); }
+button, .upload {
+  border: 1px solid #244567;
+  background: #10223a;
+  color: var(--text);
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.primary {
+  background: var(--blue);
+  color: white;
+  border: 0;
+}
+.upload {
+  display: inline-block;
+  background: var(--blue);
+  border: 0;
+  font-weight: bold;
+}
+input[type="file"] { display: none; }
+input[type="search"] {
+  width: 100%;
+  margin: 20px 0;
+  padding: 15px;
+  border-radius: 12px;
+  border: 1px solid #243852;
+  background: var(--panel);
+  color: white;
+  font-size: 16px;
+}
+.section-title { margin-top: 30px; }
+.song {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 12px;
+  background: var(--panel);
+}
+.cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg,#0754bd,#061020,#20cfff);
+  font-size: 22px;
+}
+.song-info { flex: 1; min-width: 0; }
+.song-info strong, .song-info small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.song-info small { color: var(--muted); margin-top: 5px; }
+.player {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #0b1424;
+  border-top: 1px solid #234366;
+  padding: 14px 18px;
+  box-shadow: 0 -5px 30px #0008;
+}
+.now-playing {
+  font-size: 13px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+}
+.controls button { padding: 10px 14px; }
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  margin: 10px 0;
+}
+input[type="range"] {
+  flex: 1;
+  accent-color: var(--cyan);
+  min-width: 0;
+}
+.empty {
+  padding: 30px 10px;
+  text-align: center;
+  color: var(--muted);
+}
+</style>
+</head>
+
+<body>
+<header>
+  <div class="logo">N-ARKED <span>MUSIC</span></div>
+  <span style="color:#54d9ff;font-size:12px">YOUR SOUND</span>
+</header>
+
+<main>
+  <h1>Music Universe</h1>
+  <p>Your music. Your player. Your world.</p>
+
+  <label class="upload" for="files">＋ Add Your Music</label>
+  <input id="files" type="file" accept="audio/*,.mp3" multiple>
+
+  <input id="search" type="search"
+    placeholder="Search your songs...">
+
+  <h3 class="section-title">Your Library</h3>
+  <div id="library">
+    <div class="empty">
+      <p>No songs added yet.</p>
+      Select MP3 or other supported audio files to begin.
+    </div>
+  </div>
+</main>
+
+<div class="player">
+  <div class="now-playing" id="nowPlaying">
+    Select a song to start listening
+  </div>
+
+  <div class="progress">
+    <span id="currentTime">0:00</span>
+    <input id="seek" type="range" min="0" max="1000" value="0">
+    <span id="duration">0:00</span>
+  </div>
+
+  <div class="controls">
+    <button id="prev" aria-label="Previous song">⏮</button>
+    <button class="primary" id="play" aria-label="Play or pause">▶</button>
+    <button id="next" aria-label="Next song">⏭</button>
+  </div>
+</div>
+
+<audio id="audio"></audio>
+
+<script>
+const fileInput = document.getElementById("files");
+const library = document.getElementById("library");
+const search = document.getElementById("search");
+const audio = document.getElementById("audio");
+const playButton = document.getElementById("play");
+const seek = document.getElementById("seek");
+
+let songs = [];
+let current = -1;
+
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds)) return "0:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+function renderSongs() {
+  library.replaceChildren();
+
+  const filtered = songs
+    .map((song, index) => ({song, index}))
+    .filter(item =>
+      item.song.name.toLowerCase().includes(
+        search.value.trim().toLowerCase()
+      )
+    );
+
+  if (!filtered.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = songs.length
+      ? "No matching songs found."
+      : "Add your music to get started.";
+    library.append(empty);
+    return;
+  }
+
+  filtered.forEach(({song, index}) => {
+    const row = document.createElement("div");
+    row.className = "song";
+
+    const cover = document.createElement("div");
+    cover.className = "cover";
+    cover.textContent = "♫";
+
+    const info = document.createElement("div");
+    info.className = "song-info";
+
+    const title = document.createElement("strong");
+    title.textContent = song.name.replace(/\.[^.]+$/, "");
+
+    const subtitle = document.createElement("small");
+    subtitle.textContent = index === current && !audio.paused
+      ? "Now playing"
+      : "Local audio";
+
+    info.append(title, subtitle);
+
+    const button = document.createElement("button");
+    button.textContent = index === current && !audio.paused
+      ? "Ⅱ" : "▶";
+    button.setAttribute("aria-label", "Play " + song.name);
+    button.addEventListener("click", () => {
+      if (index === current) {
+        togglePlay();
+      } else {
+        loadSong(index, true);
+      }
+    });
+
+    row.append(cover, info, button);
+    library.append(row);
+  });
+}
+
+fileInput.addEventListener("change", () => {
+  const incoming = Array.from(fileInput.files || [])
+    .filter(file => file.type.startsWith("audio/") ||
+      /\.(mp3|m4a|wav|ogg|aac|flac)$/i.test(file.name));
+
+  incoming.forEach(file => {
+    songs.push({
+      name: file.name,
+      url: URL.createObjectURL(file)
+    });
+  });
+
+  renderSongs();
+
+  if (current === -1 && songs.length > 0) {
+    loadSong(0, false);
+  }
+
+  fileInput.value = "";
+});
+
+function loadSong(index, autoplay) {
+  if (!songs.length) return;
+
+  current = (index + songs.length) % songs.length;
+  audio.src = songs[current].url;
+  document.getElementById("nowPlaying").textContent =
+    songs[current].name.replace(/\.[^.]+$/, "");
+
+  audio.load();
+  playButton.textContent = "▶";
+  seek.value = 0;
+  document.getElementById("currentTime").textContent = "0:00";
+  document.getElementById("duration").textContent = "0:00";
+  renderSongs();
+
+  if (autoplay) {
+    audio.play().catch(() => {
+      document.getElementById("nowPlaying").textContent =
+        "Tap Play to start: " + songs[current].name;
+    });
+  }
+}
+
+function togglePlay() {
+  if (current === -1) {
+    if (songs.length) loadSong(0, true);
+    else fileInput.click();
+    return;
+  }
+
+  if (audio.paused) {
+    audio.play().catch(() => {});
+  } else {
+    audio.pause();
+  }
+}
+
+playButton.addEventListener("click", togglePlay);
+
+document.getElementById("prev").addEventListener("click", () => {
+  if (songs.length) loadSong(current <= 0 ? songs.length - 1 : current - 1, true);
+});
+
+document.getElementById("next").addEventListener("click", () => {
+  if (songs.length) loadSong((current + 1) % songs.length, true);
+});
+
+audio.addEventListener("play", () => {
+  playButton.textContent = "Ⅱ";
+  renderSongs();
+});
+
+audio.addEventListener("pause", () => {
+  playButton.textContent = "▶";
+  renderSongs();
+});
+
+audio.addEventListener("ended", () => {
+  if (songs.length > 1) {
+    loadSong((current + 1) % songs.length, true);
+  }
+});
+
+audio.addEventListener("loadedmetadata", () => {
+  document.getElementById("duration").textContent =
+    formatTime(audio.duration);
+});
+
+audio.addEventListener("timeupdate", () => {
+  document.getElementById("currentTime").textContent =
+    formatTime(audio.currentTime);
+
+  if (Number.isFinite(audio.duration) && audio.duration > 0) {
+    seek.value = audio.currentTime / audio.duration * 1000;
+  }
+});
+
+seek.addEventListener("input", () => {
+  if (Number.isFinite(audio.duration) && audio.duration > 0) {
+    audio.currentTime = Number(seek.value) / 1000 * audio.duration;
+  }
+});
+
+search.addEventListener("input", renderSongs);
+window.addEventListener("pagehide", () => {
+  songs.forEach(song => URL.revokeObjectURL(song.url));
+});
+</script>
+</body>
+  </html>
+  
